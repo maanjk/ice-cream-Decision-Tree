@@ -1,70 +1,62 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
 from sklearn.tree import DecisionTreeRegressor
-from sklearn.metrics import mean_squared_error, r2_score
-import matplotlib.pyplot as plt
 
-@st.cache_data
-def load_data():
-    df = pd.read_csv("Ice Cream.csv")
-    return df
-
+# ---------------------------
+# 1. Create data & train model (cached)
+# ---------------------------
 @st.cache_resource
-def train_model(df):
-    X = df[["Temperature"]]
-    y = df["Revenue"]
+def load_and_train():
+    # Synthetic dataset: Temperature vs Revenue
+    # You can change this to match your own pattern.
+    np.random.seed(42)
+    temperatures = np.linspace(0, 40, 80)  # 0°C to 40°C
+    # Revenue roughly linear + some noise
+    revenues = 200 + 50 * temperatures + np.random.normal(0, 150, size=temperatures.shape)
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
-    )
+    df = pd.DataFrame({
+        "Temperature": temperatures,
+        "Revenue": revenues
+    })
 
-    model = DecisionTreeRegressor(max_depth=3, random_state=42)
-    model.fit(X_train, y_train)
+    X = df[["Temperature"]].values
+    y = df[["Revenue"]].values
 
-    y_pred = model.predict(X_test)
-    rmse = np.sqrt(mean_squared_error(y_test, y_pred))
-    r2 = r2_score(y_test, y_pred)
+    model = DecisionTreeRegressor(random_state=42)
+    model.fit(X, y)
 
-    return model, rmse, r2, X_train, y_train
+    return model, df
 
-df = load_data()
-model, rmse, r2, X_train, y_train = train_model(df)
 
-st.title("Ice Cream Revenue Prediction (Decision Tree Regression)")
-st.write("Dataset: Ice Cream Sales (Temperature → Revenue)")
+model, df = load_and_train()
 
-st.subheader("Model performance on test set")
-st.write(f"RMSE: **{rmse:.2f}**")
-st.write(f"R²: **{r2:.3f}**")
+# ---------------------------
+# 2. Streamlit UI
+# ---------------------------
+st.title("Ice Cream Revenue Predictor (Decision Tree Regression)")
+st.write("This app predicts ice‑cream revenue from temperature using a Decision Tree Regressor trained on a synthetic dataset (no CSV file).")
 
-st.subheader("Predict revenue for a given temperature")
+st.subheader("Sample of the training data")
+st.dataframe(df.head())
 
-temp_min = float(df["Temperature"].min())
-temp_max = float(df["Temperature"].max())
-temp_default = float(df["Temperature"].mean())
+st.subheader("Make a prediction")
 
-temperature = st.slider(
-    "Temperature (°C)", temp_min, temp_max, temp_default, 0.5
+temp = st.number_input(
+    "Temperature (°C)",
+    min_value=-10.0,
+    max_value=50.0,
+    value=30.0,
+    step=0.5,
 )
 
 if st.button("Predict revenue"):
-    x = np.array([[temperature]])
-    revenue_pred = model.predict(x)[0]
-    st.success(f"Predicted revenue: **{revenue_pred:.2f}**")
+    X_new = np.array([[temp]])          # shape (1, 1)
+    y_pred = model.predict(X_new)
+    revenue = float(np.ravel(y_pred)[0])
 
-st.subheader("Training data and Decision Tree fit")
+    st.success(f"Predicted revenue: {revenue:.2f}")
 
-show_plot = st.checkbox("Show scatter + tree prediction curve", value=True)
-if show_plot:
-    x_grid = np.linspace(temp_min, temp_max, 300).reshape(-1, 1)
-    y_grid = model.predict(x_grid)
-
-    fig, ax = plt.subplots(figsize=(6, 4))
-    ax.scatter(df["Temperature"], df["Revenue"], color="red", label="Data")
-    ax.plot(x_grid, y_grid, color="blue", label="Tree prediction")
-    ax.set_xlabel("Temperature (°C)")
-    ax.set_ylabel("Revenue")
-    ax.legend()
-    st.pyplot(fig)
+# (Optional) show the full dataset as a chart
+st.subheader("Training data scatter plot")
+st.scatter_chart(df.rename(columns={"Temperature": "x", "Revenue": "y"}))
